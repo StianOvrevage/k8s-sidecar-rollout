@@ -114,6 +114,7 @@ Results from a rollout is put in another queue. After the update queue is empty 
 
 Goals:
   - Support Deployments, StatefulSets and DaemonSets using the same process.
+  - Update while adhering to configured updateStrategy, podDisruptionBudgets, etc.
   - Simple filters for targeting sets of workloads.
   - Run to completion without interaction or crashing and log any anomalies that may require follow up after rolling out everything.
 
