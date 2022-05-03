@@ -1,11 +1,12 @@
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 from datetime import datetime
-#from alive_progress import alive_bar # https://github.com/rsalmei/alive-progress/issues/159
+from alive_progress import alive_bar # https://github.com/rsalmei/alive-progress/issues/159
 import time
 import argparse
 import asyncio
 import json_logging, logging, sys
+import pytz
 
 async def main():
   logger.debug(f'Config: {args}')
@@ -17,10 +18,10 @@ async def main():
   timeStamp = datetime.now().isoformat(timespec='seconds')
   logger.debug(f'Using {timeStamp} as timestamp for annotation')
 
-  if args.refresh_reason is not None:
-    refresh_reason = args.refresh_reason
+  if args.rollout_reason is not None:
+    rollout_reason = args.rollout_reason
   else:
-    refresh_reason = f'Update sidecars {" and ".join(args.sidecar_container_name)}'
+    rollout_reason = f'Update sidecars {" and ".join(args.sidecar_container_name)}'
 
   # Patch used to patch resources to trigger a rolling update
   patch = {
@@ -46,7 +47,7 @@ async def main():
   await queue_updates(workloads_to_update, patch, updateQueue)
 
   # Create X number of workers that are ready to receive instructions on a workload to update and wait for
-  [asyncio.create_task(updateWorkload(n, updateQueue, resultQueue)) for n in range(int(args.parallel_updates))]
+  [asyncio.create_task(updateWorkload(n, updateQueue, resultQueue)) for n in range(int(args.parallel_rollouts))]
 
   await monitor_queue(start, updateQueue)
 
@@ -67,17 +68,17 @@ async def main():
 async def monitor_queue(start, q: asyncio.Queue):
   initialQueueSize = q.qsize()
   previousQueueSize = initialQueueSize
-  #with alive_bar(initialQueueSize, title='Queue progress', monitor=False, stats=False) as bar:
-  while True:
-    if q.qsize() == 0:
-      return
-    await asyncio.sleep(1)
+  with alive_bar(initialQueueSize, title='Rollout progress', stats=False) as bar:
+    while True:
+      if q.qsize() == 0:
+        return
+      await asyncio.sleep(1)
 
-    queueChange = previousQueueSize - q.qsize()
-    for i in range(queueChange):
-      logger.info(f'PROGRESS: {initialQueueSize - q.qsize()} of {initialQueueSize} updates complete after {time.time() - start}s')
-      #bar()
-    previousQueueSize = q.qsize()
+      queueChange = previousQueueSize - q.qsize()
+      for i in range(queueChange):
+        #logger.info(f'PROGRESS: {initialQueueSize - q.qsize()} of {initialQueueSize} rollouts complete after {time.time() - start}s')
+        bar()
+      previousQueueSize = q.qsize()
 
 # Process results from result queue and tally up errors
 async def process_results(r: asyncio.Queue):
@@ -113,6 +114,12 @@ def get_workloads_to_update():
   errors = 0
   number_of_updates = 0
 
+  utc=pytz.UTC
+  pod_start_time_cutoff = datetime.now()
+  if args.only_started_before is not None:
+    pod_start_time_cutoff = datetime.fromisoformat(args.only_started_before)
+  pod_start_time_cutoff = utc.localize(pod_start_time_cutoff) 
+
   # Get and cache all replicasets and index by namespace and name
   # so that we can quickly get the Deployment that owns a Pod
   replicasets = {}
@@ -139,6 +146,10 @@ def get_workloads_to_update():
 
     if not hasSideCarWithName(i.spec.containers, args.sidecar_container_name):
       logger.debug(f'Pod {i.metadata.name} does NOT have any of {args.sidecar_container_name} container. Skipping.')
+      continue
+
+    if i.status.start_time < pod_start_time_cutoff:
+      logger.debug(f'Pod {i.metadata.namespace}/{i.metadata.name} started at {i.status.start_time} which is after {pod_start_time_cutoff}. Skipping.')
       continue
 
     hasOwner, error, ownerKind, ownerName = getOwner(i)
@@ -253,18 +264,19 @@ def hasSideCarWithName(containers, containerNames):
 if __name__ == "__main__":
   parser = argparse.ArgumentParser(description='Add/update annotation on Deployment/ReplicaSet/DaemonSet for Pods with injected sidecars.')
   parser.add_argument('--sidecar-container-name', required=True, action='append', help='Name of sidecar container to search for. Can be specified multiple times.')
+  parser.add_argument('--exclude-deployment', type=bool, default=False, help='Exclude rollout of Deployments')
+  parser.add_argument('--include-daemonset', type=bool, default=False, help='Include rollout of DaemonSets')
+  parser.add_argument('--include-statefulset', type=bool, default=False, help='Include rollout of StatefulSets')
   parser.add_argument('--include-namespace', action='append', help='Only process this namespace. Can be specified multiple times.')
   parser.add_argument('--exclude-namespace', action='append', help='Exclude namespace. Can be specified multiple times. Cannot be used with --include-namespace.')
   parser.add_argument('--annotation-prefix', default='sidecarRollout', help='Prefix for annotations.')
   parser.add_argument('--rollout-reason', help='Text inserted in rollout.reason annotation.')
   parser.add_argument('--timeout', default="300s", help='Timeout for waiting for rollout to become ready.')
-  parser.add_argument('--exclude-deployment', type=bool, default=False, help='Exclude rollout of Deployments')
-  parser.add_argument('--include-daemonset', type=bool, default=False, help='Include rollout of DaemonSets')
-  parser.add_argument('--include-statefulset', type=bool, default=False, help='Include rollout of StatefulSets')
   parser.add_argument('--confirm', type=bool, default=False, help='Actually do rollout. Without this we only do a dry-run showing what would be done.')
   parser.add_argument('--log-format', default="text", help='Log format. "json" or "text"')
   parser.add_argument('--log-level', default="info", help='Log level. debug, info, warning, error, critical')
   parser.add_argument('--parallel-rollouts', default=1, help='Number of rollouts to run in parallel.')
+  parser.add_argument('--only-started-before', help='Only rollout workload if it contains at least one Pod started before this time, (in UTC). Example: 2022-05-01 13:00') # https://docs.python.org/3/library/datetime.html#datetime.datetime.fromisoformat
 
   args = parser.parse_args()
 

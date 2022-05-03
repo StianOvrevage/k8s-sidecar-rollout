@@ -23,6 +23,7 @@ Uses https://github.com/kubernetes-client/python
 > PS: Use `kubectl version` to get cluster version. Then refer to https://pypi.org/project/kubernetes/#history to find the right client version
 
     pip3 install kubernetes==21.7.0
+    sudo apt-get install -y pkg-config libcairo2-dev
     pip3 install -r requirements.txt
 
 Perform a dry run showing which Deployments contains Pods with a container named `istio-proxy`:
@@ -59,6 +60,10 @@ Run multiple rollouts in parallel:
 
     --parallel-rollouts 10
 
+Only rollout workloads with Pods that are started before a time (for example when sidecar config was updated):
+
+    --only-started-before="2022-05-01 13:00"
+
 Exclude namespace(s):
 
     --exclude-namespace=kube-system
@@ -75,3 +80,56 @@ Log in JSON format:
 
     --log-format=json
 
+## How it works
+
+We trigger Kubernetes reconciliation by adding a JSON patch with two new/updated annotations on the Pod spec of the workload:
+
+    spec:
+      template:
+        metadata:
+          annotations:
+            sidecarRollout.rollout.timestamp: 2022-05-03T18:05:31
+            sidecarRollout.rollout.reason: Update sidecars istio-proxy
+
+> The nice thing about this is that if a product team gets surprised by a Pod restart they can rule out or confirm if the reason was a sidecar-rollout.
+
+Workload selection:
+
+  - Get all Pods for all namespaces
+  - Ignore Pods inside/outside `--include-namespace` / `--exclude-namespace`
+  - Ignore Pods that does not contain any of `--sidecar-container-name` containers
+  - Ignore Pods that are started after `--only-started-before` (default is time when script runs)
+  - Get the Owner for Pod (Deployment, StatefulSet, DaemonSet)
+  - Ignore workloads depending on `--exclude-deployment`, `--include-statefulset`, `--include-daemonset`
+
+Workloads not ignored gets added to an update queue.
+
+1 update worker (or more, if defined by `--parallel-rollouts`) starts pulling workloads (Kind/Namespace/Name) from the queue and applies the patch. It then waits for `kubectl rollout status` to complete for `300s`, unless overridden with `--timeout`.
+
+Results from a rollout is put in another queue. After the update queue is empty the results and messages are read from the queue and logged to the console.
+
+## Goals
+
+Goals:
+  - Support Deployments, StatefulSets and DaemonSets using the same process.
+  - Simple filters for targeting sets of workloads.
+  - Run to completion without interaction or crashing and log any anomalies that may require follow up after rolling out everything.
+
+Anti-goals:
+  - Re-invent logic to determine success/failure of a rollout.
+  - Re-invent logic to determine which Pods to include/exclude based on whichever annotations and rules sidecar injectors use to target Pods for injection.
+
+## Backlog:
+ - Workload selection:
+    - Include based on annotation
+    - Exclude based on annotation
+    - Revisions:
+      - Add revision annotation. Quickly gets complicated when matching on multiple arbitrary containers in one run
+ - Display & Logging:
+    - WARN for rollout status timeouts as they MAY succeed anyway
+    - Awareness of Pods/workloads that are already in a crashed state and log differently
+    - Capture output from kubectl and log in the same format (with timestamp, optionally JSON)
+ - Interactive confirm-each option
+ - Input validation
+ - Graceful termination
+ - Docker deployment
