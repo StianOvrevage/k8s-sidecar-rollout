@@ -3,7 +3,9 @@
 k8s-sidecar-rollout aims to help avoid configuration drift when using sidecar injectors
 by triggering rollout (restart) of all workloads that have one or more named (sidecar) containers.
 
-## Background
+# Background
+
+> I've written [this blog post](https://www.chipmunk.no/blog/kubernetes-sidecar-config-drift) with more detailed explanation of the contributing factors to the problem.
 
 When using for example istio, a sidecar container named `istio-proxy` is injected when Pods are created by using a MutatingWebhook.
 
@@ -16,7 +18,7 @@ In addition, often sidecar injection is managed by one or more different teams t
 
 So in effect a Deployment belonging to Team A might suddenly be unable to re-create Pods as normal when a node fails for example, and without Team A doing or even knowing about it. Since some time ago a breaking change was done to sidecar injection by Team B.
 
-## Usage
+# Usage
 
 Uses https://github.com/kubernetes-client/python
 
@@ -34,7 +36,7 @@ Actually run rollout, not just dry-run:
 
     --confirm=true
 
-### Options
+## Options
 
 Matching multiple sidecars:
 
@@ -80,7 +82,7 @@ Log in JSON format:
 
     --log-format=json
 
-## How it works
+# How it works
 
 We trigger Kubernetes reconciliation by adding a JSON patch with two new/updated annotations on the Pod spec of the workload:
 
@@ -108,7 +110,7 @@ Workloads not ignored gets added to an update queue.
 
 Results from a rollout is put in another queue. After the update queue is empty the results and messages are read from the queue and logged to the console.
 
-## Goals
+# Goals
 
 Goals:
   - Support Deployments, StatefulSets and DaemonSets using the same process.
@@ -119,14 +121,17 @@ Anti-goals:
   - Re-invent logic to determine success/failure of a rollout.
   - Re-invent logic to determine which Pods to include/exclude based on whichever annotations and rules sidecar injectors use to target Pods for injection.
 
-## Backlog:
+# Backlog
+
+Nice-to-haves for the future:
+
  - Workload selection:
     - Include based on annotation
     - Exclude based on annotation
     - Revisions:
       - Add revision annotation. Quickly gets complicated when matching on multiple arbitrary containers in one run
  - Display & Logging:
-    - WARN for rollout status timeouts as they MAY succeed anyway
+    - WARN for rollout status timeouts as they MAY succeed eventually
     - Awareness of Pods/workloads that are already in a crashed state and log differently
     - Capture output from kubectl and log in the same format (with timestamp, optionally JSON)
  - Interactive confirm-each option
