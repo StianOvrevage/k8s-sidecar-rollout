@@ -148,7 +148,7 @@ def get_workloads_to_update():
       logger.debug(f'Pod {i.metadata.name} does NOT have any of {args.sidecar_container_name} container. Skipping.')
       continue
 
-    if i.status.start_time < pod_start_time_cutoff:
+    if i.status.start_time > pod_start_time_cutoff:
       logger.debug(f'Pod {i.metadata.namespace}/{i.metadata.name} started at {i.status.start_time} which is after {pod_start_time_cutoff}. Skipping.')
       continue
 
