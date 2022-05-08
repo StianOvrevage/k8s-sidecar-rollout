@@ -3,6 +3,8 @@
 k8s-sidecar-rollout aims to help avoid configuration drift when using sidecar injectors
 by triggering rollout (restart) of all workloads that have one or more named (sidecar) containers.
 
+> Huge shout out to the team at [Signicat](https://www.signicat.com) for letting me share this small, but hopefully usefull tool and analysis with the rest of the Kubernetes community. If this is the kind of stuff that excites you head over to [Signicat Careers](https://www.signicat.com/about/careers) and join us!
+
 # Background
 
 > I've written [this blog post](https://www.chipmunk.no/blog/kubernetes-sidecar-config-drift) with more detailed explanation of the contributing factors to the problem.
