@@ -7,7 +7,7 @@ by triggering rollout (restart) of all workloads that have one or more named (si
 
 # Background
 
-> I've written [this blog post](https://www.chipmunk.no/blog/kubernetes-sidecar-config-drift) with more detailed explanation of the contributing factors to the problem.
+> I've written [this blog post](https://chipmunk.no/blog/2022-05-03-kubernetes-sidecar-config-drift/) with more detailed explanation of the contributing factors to the problem.
 
 When using for example istio, a sidecar container named `istio-proxy` is injected when Pods are created by using a MutatingWebhook.
 
@@ -20,15 +20,25 @@ In addition, often sidecar injection is managed by one or more different teams t
 
 So in effect a Deployment belonging to Team A might suddenly be unable to re-create Pods as normal when a node fails for example, and without Team A doing or even knowing about it. Since some time ago a breaking change was done to sidecar injection by Team B.
 
-# Usage
+# Setup
+
+Prerequisites:
+
+    # Linux and WSL
+    sudo apt-get install -y pkg-config libcairo2-dev
+
+    # MacOS
+    brew install cmake pkg-config cairo
+    pip3 install pycairo
 
 Uses https://github.com/kubernetes-client/python
 
-> PS: Use `kubectl version` to get cluster version. Then refer to https://pypi.org/project/kubernetes/#history to find the right client version
+> PS: Use `kubectl version` to get cluster server version. Then refer to https://pypi.org/project/kubernetes/#history to find the right client version to use here:
 
     pip3 install kubernetes==21.7.0
-    sudo apt-get install -y pkg-config libcairo2-dev
     pip3 install -r requirements.txt
+
+# Usage
 
 Perform a dry run showing which Deployments contains Pods with a container named `istio-proxy`:
 
@@ -123,6 +133,15 @@ Goals:
 Anti-goals:
   - Re-invent logic to determine success/failure of a rollout.
   - Re-invent logic to determine which Pods to include/exclude based on whichever annotations and rules sidecar injectors use to target Pods for injection.
+
+# Development
+
+Update pip module versions:
+
+    pip install pur
+    pur -r requirements.txt
+
+Beware that `urrlib3` may have to be set back to `urllib3<2.0` due to the `kubernetes` package.
 
 # Backlog
 

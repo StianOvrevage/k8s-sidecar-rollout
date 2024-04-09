@@ -148,7 +148,8 @@ def get_workloads_to_update():
       logger.debug(f'Pod {i.metadata.name} does NOT have any of {args.sidecar_container_name} container. Skipping.')
       continue
 
-    if i.status.start_time > pod_start_time_cutoff:
+    # i.status.start_time can be None if Pod for example is Pending
+    if i.status.start_time is not None and i.status.start_time > pod_start_time_cutoff:
       logger.debug(f'Pod {i.metadata.namespace}/{i.metadata.name} started at {i.status.start_time} which is after {pod_start_time_cutoff}. Skipping.')
       continue
 
@@ -166,21 +167,25 @@ def get_workloads_to_update():
         errors += 1
         continue
 
+    if ownerKind == "Job":
+      logger.debug(f'{i.metadata.namespace}/{i.metadata.name} is owned by Job. Skipping.')
+      continue
+
     if ownerKind not in ["Deployment", "DaemonSet", "StatefulSet"]:
       logger.error(f'{i.metadata.namespace}/{i.metadata.name} unknown kind {ownerKind}')
       errors += 1
       continue
 
     if ownerKind == "Deployment" and args.exclude_deployment:
-      logger.debug(f'{i.metadata.namespace}/{i.metadata.name} is owner by Deployment but exclude_deployment is enabled. Skipping.')
+      logger.debug(f'{i.metadata.namespace}/{i.metadata.name} is owned by Deployment but exclude_deployment is enabled. Skipping.')
       continue
     
     if ownerKind == "DaemonSet" and not args.include_daemonset:
-      logger.debug(f'{i.metadata.namespace}/{i.metadata.name} is owner by DaemonSet but include_daemonset is not enabled. Skipping.')
+      logger.debug(f'{i.metadata.namespace}/{i.metadata.name} is owned by DaemonSet but include_daemonset is not enabled. Skipping.')
       continue
 
     if ownerKind == "StatefulSet" and not args.include_statefulset:
-      logger.debug(f'{i.metadata.namespace}/{i.metadata.name} is owner by StatefulSet but include_statefulset is not enabled. Skipping.')
+      logger.debug(f'{i.metadata.namespace}/{i.metadata.name} is owned by StatefulSet but include_statefulset is not enabled. Skipping.')
       continue
 
     logger.info(f'Pod {i.metadata.namespace}/{i.metadata.name} has one of {args.sidecar_container_name} sidecars and is owned by {ownerKind}/{ownerName}. Adding to update list.')
