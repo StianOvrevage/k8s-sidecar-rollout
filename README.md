@@ -22,21 +22,12 @@ So in effect a Deployment belonging to Team A might suddenly be unable to re-cre
 
 # Setup
 
-Prerequisites:
+Use `kubectl version` to get cluster server version. Then refer to https://pypi.org/project/kubernetes/#history to find the right client version to use here:
 
-    # Linux and WSL
-    sudo apt-get install -y pkg-config libcairo2-dev
-
-    # MacOS
-    brew install cmake pkg-config cairo
-    pip3 install pycairo
-
-Uses https://github.com/kubernetes-client/python
-
-> PS: Use `kubectl version` to get cluster server version. Then refer to https://pypi.org/project/kubernetes/#history to find the right client version to use here:
-
-    pip3 install kubernetes==21.7.0
+    pip3 install kubernetes==28.1.0
     pip3 install -r requirements.txt
+
+> Uses https://github.com/kubernetes-client/python
 
 # Usage
 
@@ -50,9 +41,25 @@ Actually run rollout, not just dry-run:
 
 ## Options
 
-Matching multiple sidecars:
+Run multiple rollouts in parallel:
 
-    --sidecar-container-name=istio-proxy --sidecar-container-name=my-other-sidecar 
+    --parallel-rollouts 10
+
+Set annotation prefix:
+
+    --annotation-prefix=myCompany
+
+Timeout for waiting for rollout to become Ready (default 300s):
+
+    --timeout=600s
+
+Exclude namespace(s):
+
+    --exclude-namespace=kube-system
+
+Only rollout namespace(s):
+
+    --include-namespace=my-first-app --include-namespace=my-other-app
 
 Including StatefulSets and DaemonSets (excluded by default):
 
@@ -62,29 +69,13 @@ Exclude Deployments (included by default):
 
     --exclude-deployments=true
 
-Timeout for waiting for rollout to become Ready (default 300s):
+Matching multiple sidecars:
 
-    --timeout=600s
-
-Set annotation prefix:
-
-    --annotation-prefix=myCompany
-
-Run multiple rollouts in parallel:
-
-    --parallel-rollouts 10
+    --sidecar-container-name=istio-proxy --sidecar-container-name=my-other-sidecar
 
 Only rollout workloads with Pods that are started before a time (for example when sidecar config was updated):
 
     --only-started-before="2022-05-01 13:00"
-
-Exclude namespace(s):
-
-    --exclude-namespace=kube-system
-
-Only rollout namespace(s):
-
-    --include-namespace=my-first-app --include-namespace=my-other-app
 
 Debug log:
 
@@ -138,10 +129,8 @@ Anti-goals:
 
 Update pip module versions:
 
-    pip install pur
+    pip3 install pur
     pur -r requirements.txt
-
-Beware that `urrlib3` may have to be set back to `urllib3<2.0` due to the `kubernetes` package.
 
 # Backlog
 
